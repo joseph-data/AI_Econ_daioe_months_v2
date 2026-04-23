@@ -1,0 +1,12 @@
+[project]
+name = "ai-econ-daioe-months-v2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pandas>=3.0.2",
+    "pathlib>=1.0.1",
+    "polars>=1.40.1",
+    "pyscbwrapper>=0.1.2",
+]

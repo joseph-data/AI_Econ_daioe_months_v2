@@ -1,0 +1,112 @@
+name: SCB Pull → DAIOE Pull
+
+on:
+  push:
+    branches:
+      - scb_pull
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: "Source branch to run scripts from"
+        required: false
+        default: "scb_pull"
+      target_branch:
+        description: "Target branch to push data into"
+        required: false
+        default: "daioe_pull"
+  schedule:
+    - cron: "0 0 * * *"  # daily at 00:00 UTC
+
+concurrency:
+  group: data-sync-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+
+# ============ Build ============ #
+
+jobs:
+  build-data:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_BRANCH: ${{ github.event.inputs.source_branch || vars.SOURCE_BRANCH || 'scb_pull' }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.SOURCE_BRANCH }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ">=3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run data scripts
+        run: |
+          set -euo pipefail
+          uv run main.py
+
+      - name: Upload data artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scb-output
+          path: data/scb_months.parquet
+
+
+# ============ Sync ============ #
+
+  sync-target:
+    runs-on: ubuntu-latest
+    needs: build-data
+    env:
+      TARGET_BRANCH: ${{ github.event.inputs.target_branch || vars.TARGET_BRANCH || 'daioe_pull' }}
+
+    steps:
+      - name: Checkout target
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Download data artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: scb-output
+          path: data/
+
+      - name: Validate artifact
+        run: |
+          set -euo pipefail
+          if [ ! -f "data/scb_months.parquet" ]; then
+            echo "ERROR: Missing expected parquet file in artifact."
+            exit 1
+          fi
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/scb_months.parquet
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update scb months data [skip ci]"
+          git push origin "${TARGET_BRANCH}"
