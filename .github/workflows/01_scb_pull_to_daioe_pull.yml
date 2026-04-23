@@ -41,12 +41,12 @@ jobs:
           ref: ${{ env.SOURCE_BRANCH }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ">=3.14"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8
         with:
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
@@ -60,7 +60,7 @@ jobs:
           uv run main.py
 
       - name: Upload data artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: scb-output
           path: data/scb_months.parquet
@@ -82,7 +82,7 @@ jobs:
           ref: ${{ env.TARGET_BRANCH }}
 
       - name: Download data artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: scb-output
           path: data/
